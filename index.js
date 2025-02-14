@@ -8,11 +8,19 @@ const base58 = require("bs58");
 const Web3 = require("web3");
 const { getFullnodeUrl, SuiClient } = require("@mysten/sui/client");
 
+const { setbot } = require("./src/Setbot");
 const { home } = require("./src/Home");
 const { buy } = require("./src/Buy");
+const { sell } = require("./src/Sell");
+const {sellOther} = require("./src/SellOther");
+const { Wallet } = require("./src/Wallet");
+const { getTokenAccounts } = require("./src/Helius");
+const { Withdraw } = require("./src/Withdraw");
 const { BuySOL } = require("./src/BuySOL");
 const { BuyBNB } = require("./src/BuyBNB");
 const { BuyETH } = require("./src/BuyETH");
+
+const { SellSOL } = require("./src/SellSOL");
 const { setnetwork } = require("./src/SetNetwork");
 const { BuySUI } = require("./src/BuySUI");
 const Moralis = require("moralis").default;
@@ -62,6 +70,14 @@ bot.on("message", async (msg) => {
       case "home":
         //Check if user has a wallet
         home(chatId, bot);
+        break;
+      case "settings":
+        //Display settings menu
+        setbot(chatId, null, bot);
+        break;
+      case "wallet":
+        //Display wallet menu
+        Wallet(chatId, bot);
         break;
       default:
         break;
@@ -134,6 +150,39 @@ bot.on("callback_query", async (query) => {
         },
         parse_mode: "HTML",
       });
+      break;
+    case "sell":
+      if (userWallet.network === "sol") {
+        // Handle sell button click
+        if (sell_data.total === 0) {
+          bot.sendMessage(chatId, `No Open positions`, {
+            reply_markup: {
+              inline_keyboard: [[{ text: "Close", callback_data: "close" }]],
+            },
+            parse_mode: "html",
+          });
+        } else {
+          sell(chatId, bot, sell_data, sell_count);
+        }
+      }
+      else {
+        sellOther(chatId, bot);
+      }
+      break;
+    case "help":
+      // Handle help button click
+      help(chatId, bot);
+      break;
+    case "refer":
+      // Handle refer button click
+      break;
+    case "wallet":
+      // Handle wallet button click
+      Wallet(chatId, bot);
+      break;
+    case "setting":
+      // Handle setting button click
+      setbot(chatId, null, bot);
       break;
     case "pin":
       // Handle pin button click
@@ -264,6 +313,46 @@ bot.on("callback_query", async (query) => {
           `Delete this message once you are done.`;
         bot.sendMessage(chatId, text, { parse_mode: "HTML" });
       }
+      break;
+    case "withdrawall":
+      // Handle withdraw all SOL button click
+      Withdraw(chatId, bot, "all");
+      break;
+    case "withdraw":
+      // Handle withdraw X SOL button click
+      await Withdraw(chatId, bot, "x");
+      break;
+    case "withdrawall_eth":
+      // Handle withdraw all SOL button click
+      Withdraw(chatId, bot, "all");
+      break;
+    case "withdraw_eth":
+      // Handle withdraw X SOL button click
+      await Withdraw(chatId, bot, "x");
+      break;
+    case "withdrawall_bnb":
+      // Handle withdraw all SOL button click
+      Withdraw(chatId, bot, "all");
+      break;
+    case "withdrawall_sui":
+      // Handle withdraw all SOL button click
+      Withdraw(chatId, bot, "all");
+      break;
+    case "withdraw_bnb":
+      // Handle withdraw X SOL button click
+      await Withdraw(chatId, bot, "x");
+      break;
+    case "withdraw_sui":
+      // Handle withdraw X SOL button click
+      await Withdraw(chatId, bot, "x");
+      break;
+    case "withdrawall_sui":
+      // Handle withdraw all SOL button click
+      Withdraw(chatId, bot, "all");
+      break;
+    case "withdraw_sui":
+      // Handle withdraw X SOL button click
+      await Withdraw(chatId, bot, "x");
       break;
     case "resetwallet":
       // Handle reset wallet button click
@@ -613,7 +702,122 @@ bot.on("callback_query", async (query) => {
       // Handle home button click
       home(chatId, bot);
       break;
-    
+    case "sell_buyleft":
+      // Handle sell buy left button click
+      storage.getItem(`userWallet_${chatId}`).then(async (userWallet) => {
+        const buy_amount = userWallet.settings.buyleftset;
+        const token = sell_data.token_accounts[sell_count].mint;
+        BuySOL(chatId, bot, token, buy_amount);
+      });
+      break;
+    case "sell_buyright":
+      // Handle sell buy right button click
+      storage.getItem(`userWallet_${chatId}`).then(async (userWallet) => {
+        const buy_amount = userWallet.settings.buyrightset;
+        const token = sell_data.token_accounts[sell_count].mint;
+        BuySOL(chatId, bot, token, buy_amount);
+      });
+      break;
+    case "sell_buyx":
+      // Handle sell buy x button click
+      bot
+        .sendMessage(
+          chatId,
+          `Reply with the amount you wish to buy (0-${walletbalance} SOL, Example:0.1)`,
+          {
+            reply_markup: {
+              force_reply: true,
+            },
+          }
+        )
+        .then((addApiId) => {
+          bot.onReplyToMessage(
+            addApiId.chat.id,
+            addApiId.message_id,
+            async (msg) => {
+              const buy_amount = msg.text;
+              const token = sell_data.token_accounts[sell_count].mint;
+              BuySOL(chatId, bot, token, buy_amount);
+            }
+          );
+        });
+      break;
+    case "sellleft":
+      // Handle sell left button click
+      storage.getItem(`userWallet_${chatId}`).then(async (userWallet) => {
+        const sell_percent = userWallet.settings.sellleftset;
+        const token = sell_data.token_accounts[sell_count].mint;
+        SellSOL(chatId, bot, token, sell_percent);
+      });
+      break;
+    case "sellright":
+      // Handle sell right button click
+      storage.getItem(`userWallet_${chatId}`).then(async (userWallet) => {
+        const sell_percent = userWallet.settings.sellrightset;
+        const token = sell_data.token_accounts[sell_count].mint;
+        SellSOL(chatId, bot, token, sell_percent);
+      });
+      break;
+    case "sellx":
+      // Handle sell x button click
+      bot
+        .sendMessage(
+          chatId,
+          `Reply with the percent you wish to sell (Example:25)`,
+          {
+            reply_markup: {
+              force_reply: true,
+            },
+          }
+        )
+        .then((addApiId) => {
+          bot.onReplyToMessage(
+            addApiId.chat.id,
+            addApiId.message_id,
+            async (msg) => {
+              const sell_percent = msg.text;
+              const token = sell_data.token_accounts[sell_count].mint;
+              SellSOL(chatId, bot, token, sell_percent);
+            }
+          );
+        });
+      break;
+    case "symbol":
+      // Handle symbol button click
+      sell(chatId, bot, sell_data, sell_count, msgId);
+      break;
+    case "sell_token_prev":
+      // Handle sell_token_prev button click
+      if (sell_count === 0) {
+        sell_count = 0;
+      } else {
+        sell_count = sell_count - 1;
+        sell(chatId, bot, sell_data, sell_count, msgId);
+      }
+      break;
+    case "sell_token_next":
+      // Handle sell_token_next button click
+      if (sell_count === mx_sell_count - 1) {
+        sell_count = sell_count;
+      } else {
+        sell_count = sell_count + 1;
+        sell(chatId, bot, sell_data, sell_count, msgId);
+      }
+      break;
+    case "refresh_sell":
+      // Handle refresh button click
+      if (sell_data.total === 0) {
+        bot.sendMessage(chatId, `No Open positions`, {
+          reply_markup: {
+            inline_keyboard: [[{ text: "Close", callback_data: "close" }]],
+          },
+          parse_mode: "html",
+        });
+      } else {
+        sell(chatId, bot, sell_data, sell_count, msgId);
+      }
+      break;
+    //send end
 
     //settings start
     case "announcements":
@@ -744,6 +948,56 @@ bot.on("callback_query", async (query) => {
           });
       });
       break;
+    case "sellleftset":
+      storage.getItem(`userWallet_${chatId}`).then(async (userWallet) => {
+        bot
+          .sendMessage(
+            chatId,
+            "Reply with your new setting for the left Sell Button in % (0 - 100%). Example: 25",
+            {
+              reply_markup: {
+                force_reply: true,
+              },
+            }
+          )
+          .then((addApiId) => {
+            bot.onReplyToMessage(
+              addApiId.chat.id,
+              addApiId.message_id,
+              async (msg) => {
+                userWallet.settings.sellleftset = msg.text;
+                await storage.setItem(`userWallet_${chatId}`, userWallet);
+                setbot(chatId, msgId, bot);
+              }
+            );
+          });
+      });
+      break;
+    case "sellrightset":
+      storage.getItem(`userWallet_${chatId}`).then(async (userWallet) => {
+        bot
+          .sendMessage(
+            chatId,
+            "Reply with your new setting for the right Sell Button in % (0 - 100%). Example: 100",
+            {
+              reply_markup: {
+                force_reply: true,
+              },
+            }
+          )
+          .then((addApiId) => {
+            bot.onReplyToMessage(
+              addApiId.chat.id,
+              addApiId.message_id,
+              async (msg) => {
+                userWallet.settings.sellrightset = msg.text;
+                await storage.setItem(`userWallet_${chatId}`, userWallet);
+                setbot(chatId, msgId, bot);
+              }
+            );
+          });
+      });
+      break;
     case "slippagebuy":
       storage.getItem(`userWallet_${chatId}`).then(async (userWallet) => {
         bot
@@ -769,7 +1023,31 @@ bot.on("callback_query", async (query) => {
           });
       });
       break;
-    
+    case "slippagesell":
+      storage.getItem(`userWallet_${chatId}`).then(async (userWallet) => {
+        bot
+          .sendMessage(
+            chatId,
+            "Reply with your new slippage setting for sells in % (0.00 - 100.00%). Example: 1.5",
+            {
+              reply_markup: {
+                force_reply: true,
+              },
+            }
+          )
+          .then((addApiId) => {
+            bot.onReplyToMessage(
+              addApiId.chat.id,
+              addApiId.message_id,
+              async (msg) => {
+                userWallet.settings.slippagesell = msg.text;
+                await storage.setItem(`userWallet_${chatId}`, userWallet);
+                setbot(chatId, msgId, bot);
+              }
+            );
+          });
+      });
+      break;
     case "maximpct":
       storage.getItem(`userWallet_${chatId}`).then(async (userWallet) => {
         bot

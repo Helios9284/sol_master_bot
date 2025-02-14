@@ -1,16 +1,18 @@
 require('dotenv').config();
-const {swapJupyter, getTokenBalance, getTokenData} = require('./server-function');
-const storage = require('node-persist');
-const bs58 = require('bs58');
-const { Wallet } = require('@project-serum/anchor');
-const { Keypair } = require("@solana/web3.js");
 
-const SOL = "So11111111111111111111111111111111111111112";
+const storage = require('node-persist');
+const { Keypair } = require("@solana/web3.js")
+const bs58 = require("bs58")
+const { Wallet } = require("@project-serum/anchor")
+// const { swapJupyter, getTokenBalance } = require('./server-function');
+const {} = require('./server-function')
+
 storage.init();
+const SOL = "So11111111111111111111111111111111111111112"
 
 let activeIntervals = {}
 let intervalPiece = 0
-const BuySOL = async (chatId, bot, tokenAddress, buy_amount) => {
+const SellSOL = async (chatId, bot, tokenAddress, percentageToSell) => {
     let user_pri_key;
 
     await storage.getItem(`userWallet_${chatId}`).then(async (userWallet) => {
@@ -31,18 +33,18 @@ const BuySOL = async (chatId, bot, tokenAddress, buy_amount) => {
             wallet.publicKey,
             tokenAddress,
         )
-
-        let spl_amount;
-
-        if (!tokenBalance) {
-            spl_amount = 0
-        } else {
-            spl_amount = tokenBalance.amount;
-        }
-        let response = await swapJupyter(user_pri_key, SOL, tokenAddress, buy_amount * 1e9, 10);
+        if (!tokenBalance) return { ok: false, msg: "Token balance not found" }
+        const amountToSell = (tokenBalance.amount * percentageToSell) / 100
+        const response = await swapJupyter(
+            user_pri_key,
+            tokenAddress,
+            SOL,
+            amountToSell,
+            10,
+        )
 
         if (!response || !response.ok || !response.txid) {
-            txt = "Transaction failed. Coundn't get a quote";
+            txt = "Transaction failed.\n Coundn't get a quote";
             bot.editMessageText(txt, {
                 chat_id: chatId,
                 message_id: msgId,
@@ -54,54 +56,46 @@ const BuySOL = async (chatId, bot, tokenAddress, buy_amount) => {
         let intervalCounter = 0
         intervalPiece++
         const myInterCount = intervalPiece
-        const interval = setInterval(async () => {
-
+        const intervalSell = setInterval(async () => {
             intervalCounter++
             let tokenBalanceAfterSelling = await getTokenBalance(
                 wallet.publicKey,
                 tokenAddress,
             )
-            let spl_afteramount;
-            if (!tokenBalanceAfterSelling) {
-                spl_afteramount = 0
-            } else {
-                spl_afteramount = tokenBalanceAfterSelling.amount;
-            }
-
-            if (spl_afteramount > spl_amount) {
-                clearInterval(activeIntervals[myInterCount]);
-                txt = `Transaction confirmed!\nhttps://solscan.io/tx/${response.txid}`
-
-                bot.editMessageText(txt, {
-                    chat_id: chatId,
-                    message_id: msgId,
-                    parse_mode: "html",
-                });
-            } else if (intervalCounter >= 25) {
-
+            // Token has been sold
+            if (!tokenBalanceAfterSelling || tokenBalanceAfterSelling.amount < tokenBalance.amount) {
                 clearInterval(activeIntervals[myInterCount])
-
-                txt = "Transaction failed. Coundn't get a quote";
+                txt = `Transaction confirmed!\nhttps://solscan.io/tx/${response.txid}`
                 bot.editMessageText(txt, {
                     chat_id: chatId,
                     message_id: msgId,
                     parse_mode: "html",
                 });
+                return;
+            } else if (intervalCounter >= 21) {
+                clearInterval(activeIntervals[myInterCount])
+                txt = "Transaction failed.\n Coundn't get a quote";
+                bot.editMessageText(txt, {
+                    chat_id: chatId,
+                    message_id: msgId,
+                    parse_mode: "html",
+                });
+                return;
             }
         }, 3e3)
-        activeIntervals[myInterCount] = interval
-    } catch (error) {
-
-        txt = "Transaction failed. Coundn't get a quote";
+        // Mapping where the key is the address
+        activeIntervals[myInterCount] = intervalSell
+    } catch (e) {
+        txt = "Transaction failed.\n Coundn't get a quote";
         bot.editMessageText(txt, {
             chat_id: chatId,
             message_id: msgId,
             parse_mode: "html",
         });
-        return
+        return;
     }
 }
 
 module.exports = {
-    BuySOL
+    SellSOL
 }
